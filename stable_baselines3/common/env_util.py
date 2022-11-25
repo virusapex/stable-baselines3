@@ -82,6 +82,7 @@ def make_vec_env(
             if isinstance(env_id, str):
                 env = gym.make(env_id, **env_kwargs)
             else:
+                env_kwargs = {'port':23000+rank*2}
                 env = env_id(**env_kwargs)
             if seed is not None:
                 env.seed(seed + rank)
