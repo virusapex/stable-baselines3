@@ -47,6 +47,7 @@ def make_vec_env(
     vec_env_kwargs: Optional[Dict[str, Any]] = None,
     monitor_kwargs: Optional[Dict[str, Any]] = None,
     wrapper_kwargs: Optional[Dict[str, Any]] = None,
+    eval_env: Optional[bool] = False,
 ) -> VecEnv:
     """
     Create a wrapped, monitored ``VecEnv``.
@@ -82,8 +83,12 @@ def make_vec_env(
             if isinstance(env_id, str):
                 env = gym.make(env_id, **env_kwargs)
             else:
-                env_kwargs = {'port':23000+rank*2}
-                env = env_id(**env_kwargs)
+                if eval_env:
+                    env_kwargs = {'port':23020}
+                    env = env_id(**env_kwargs)
+                else:
+                    env_kwargs = {'port':23000+rank*2}
+                    env = env_id(**env_kwargs)
             if seed is not None:
                 env.seed(seed + rank)
                 env.action_space.seed(seed + rank)
