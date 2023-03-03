@@ -606,7 +606,7 @@ However, SB3 provides a ``save_replay_buffer()`` and ``load_replay_buffer()`` me
 Accessing and modifying model parameters
 ----------------------------------------
 
-You can access model's parameters via ``load_parameters`` and ``get_parameters`` functions,
+You can access model's parameters via ``set_parameters`` and ``get_parameters`` functions,
 or via ``model.policy.state_dict()`` (and ``load_state_dict()``),
 which use dictionaries that map variable names to PyTorch tensors.
 
@@ -768,10 +768,6 @@ Record a mp4 video (here using a random agent).
 
 Bonus: Make a GIF of a Trained Agent
 ------------------------------------
-
-.. note::
-  For Atari games, you need to use a screen recorder such as `Kazam <https://launchpad.net/kazam>`_.
-  And then convert the video using `ffmpeg <https://superuser.com/questions/556029/how-do-i-convert-a-video-to-gif-using-ffmpeg-with-reasonable-quality>`_
 
 .. code-block:: python
 

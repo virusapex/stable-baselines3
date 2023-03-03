@@ -7,9 +7,9 @@ from abc import ABC, abstractmethod
 from functools import partial
 from typing import Any, Dict, List, Optional, Tuple, Type, TypeVar, Union
 
-import gym
 import numpy as np
 import torch as th
+from gym import spaces
 from torch import nn
 
 from stable_baselines3.common.distributions import (
@@ -60,8 +60,8 @@ class BaseModel(nn.Module):
 
     def __init__(
         self,
-        observation_space: gym.spaces.Space,
-        action_space: gym.spaces.Space,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
         features_extractor_class: Type[BaseFeaturesExtractor] = FlattenExtractor,
         features_extractor_kwargs: Optional[Dict[str, Any]] = None,
         features_extractor: Optional[nn.Module] = None,
@@ -118,26 +118,14 @@ class BaseModel(nn.Module):
         """Helper method to create a features extractor."""
         return self.features_extractor_class(self.observation_space, **self.features_extractor_kwargs)
 
-    def extract_features(self, obs: th.Tensor, features_extractor: Optional[BaseFeaturesExtractor] = None) -> th.Tensor:
+    def extract_features(self, obs: th.Tensor, features_extractor: BaseFeaturesExtractor) -> th.Tensor:
         """
         Preprocess the observation if needed and extract features.
 
          :param obs: The observation
-         :param features_extractor: The features extractor to use. If it is set to None,
-            the features extractor of the policy is used.
-         :return: The features
+         :param features_extractor: The features extractor to use.
+         :return: The extracted features
         """
-        if features_extractor is None:
-            warnings.warn(
-                (
-                    "When calling extract_features(), you should explicitely pass a features_extractor as parameter. "
-                    "This will be mandatory in Stable-Baselines v1.8.0"
-                ),
-                DeprecationWarning,
-            )
-
-        features_extractor = features_extractor or self.features_extractor
-        assert features_extractor is not None, "No features extractor was set"
         preprocessed_obs = preprocess_obs(obs, self.observation_space, normalize_images=self.normalize_images)
         return features_extractor(preprocessed_obs)
 
@@ -344,7 +332,7 @@ class BasePolicy(BaseModel, ABC):
         # Convert to numpy, and reshape to the original action shape
         actions = actions.cpu().numpy().reshape((-1,) + self.action_space.shape)
 
-        if isinstance(self.action_space, gym.spaces.Box):
+        if isinstance(self.action_space, spaces.Box):
             if self.squash_output:
                 # Rescale to proper domain when using squashing
                 actions = self.unscale_action(actions)
@@ -415,10 +403,10 @@ class ActorCriticPolicy(BasePolicy):
 
     def __init__(
         self,
-        observation_space: gym.spaces.Space,
-        action_space: gym.spaces.Space,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
         lr_schedule: Schedule,
-        net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None,
+        net_arch: Optional[Union[List[int], Dict[str, List[int]]]] = None,
         activation_fn: Type[nn.Module] = nn.Tanh,
         ortho_init: bool = True,
         use_sde: bool = False,
@@ -433,7 +421,6 @@ class ActorCriticPolicy(BasePolicy):
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
     ):
-
         if optimizer_kwargs is None:
             optimizer_kwargs = {}
             # Small values to avoid NaN in Adam optimizer
@@ -451,12 +438,22 @@ class ActorCriticPolicy(BasePolicy):
             normalize_images=normalize_images,
         )
 
+        if isinstance(net_arch, list) and len(net_arch) > 0 and isinstance(net_arch[0], dict):
+            warnings.warn(
+                (
+                    "As shared layers in the mlp_extractor are removed since SB3 v1.8.0, "
+                    "you should now pass directly a dictionary and not a list "
+                    "(net_arch=dict(pi=..., vf=...) instead of net_arch=[dict(pi=..., vf=...)])"
+                ),
+            )
+            net_arch = net_arch[0]
+
         # Default network architecture, from stable-baselines
         if net_arch is None:
             if features_extractor_class == NatureCNN:
                 net_arch = []
             else:
-                net_arch = [dict(pi=[64, 64], vf=[64, 64])]
+                net_arch = dict(pi=[64, 64], vf=[64, 64])
 
         self.net_arch = net_arch
         self.activation_fn = activation_fn
@@ -471,11 +468,6 @@ class ActorCriticPolicy(BasePolicy):
         else:
             self.pi_features_extractor = self.features_extractor
             self.vf_features_extractor = self.make_features_extractor()
-            # if the features extractor is not shared, there cannot be shared layers in the mlp_extractor
-            if len(net_arch) > 0 and not isinstance(net_arch[0], dict):
-                raise ValueError(
-                    "Error: if the features extractor is not shared, there cannot be shared layers in the mlp_extractor"
-                )
 
         self.log_std_init = log_std_init
         dist_kwargs = None
@@ -749,10 +741,10 @@ class ActorCriticCnnPolicy(ActorCriticPolicy):
 
     def __init__(
         self,
-        observation_space: gym.spaces.Space,
-        action_space: gym.spaces.Space,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
         lr_schedule: Schedule,
-        net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None,
+        net_arch: Optional[Union[List[int], Dict[str, List[int]]]] = None,
         activation_fn: Type[nn.Module] = nn.Tanh,
         ortho_init: bool = True,
         use_sde: bool = False,
@@ -822,10 +814,10 @@ class MultiInputActorCriticPolicy(ActorCriticPolicy):
 
     def __init__(
         self,
-        observation_space: gym.spaces.Dict,
-        action_space: gym.spaces.Space,
+        observation_space: spaces.Dict,
+        action_space: spaces.Space,
         lr_schedule: Schedule,
-        net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None,
+        net_arch: Optional[Union[List[int], Dict[str, List[int]]]] = None,
         activation_fn: Type[nn.Module] = nn.Tanh,
         ortho_init: bool = True,
         use_sde: bool = False,
@@ -890,8 +882,8 @@ class ContinuousCritic(BaseModel):
 
     def __init__(
         self,
-        observation_space: gym.spaces.Space,
-        action_space: gym.spaces.Space,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
         net_arch: List[int],
         features_extractor: nn.Module,
         features_dim: int,
